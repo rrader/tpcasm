@@ -5,11 +5,15 @@ import argparse
 
 VERSION = (0, 1)
 
-JMPS = ['mjmp', 'mjcmp', ]
+LEN = 6
+
+JMPS = ['mjmp', 'mjcmp', 'mjz']
+NOOPS = ['mjcmd']
 DELAY = {
     'mmov': 3,
     'mmovl': 3,
     'mjmp': 3,  # (mjc) по кол-ву флагов
+    'mjz': 3,
     'madd': 3,
     'msub': 3,
     'mor': 3,
@@ -21,9 +25,11 @@ DELAY = {
 }
 
 CMD = {
+    'label': -1,
     'mmov': 0,
     'mmovl': 1,
     'mjmp': 2,  # (mjc) по кол-ву флагов
+    'mjz': 2,
     'madd': 3,
     'msub': 4,
     'mor': 5,
@@ -54,6 +60,11 @@ OP['EXT'] = len(OP)
 
 OP['@SP'] = len(OP)
 OP['@IC'] = len(OP)
+OP['IENC'] = len(OP)
+
+OP['op1r'] = len(OP)
+OP['op1w'] = len(OP)
+OP['op2r'] = len(OP)
 
 
 def print_header():
@@ -62,9 +73,25 @@ def print_header():
 
 
 def parse_instruction(instr):
+    instr = instr.split(';')[0]  # comments
+    # print(instr.strip())
+
+    if not instr:
+        return None, None, None, None
+
+    # print(list(filter(None, instr.split(':'))))
+    if len(list(filter(None, instr.split(':')))) >= 2:  # label
+        cmd = 'label'
+        return cmd, instr.split(':')[0], None, None
+
     cmd = instr.split()[0]
     args = ' '.join(instr.split()[1:]).split(',')
-    op1, op2 = args[:2]
+    op1 = args[0]
+
+    op2 = ''
+    if len(args) >= 2:
+        op2 = args[1]
+
     add = []
 
     if len(args) >= 3:
@@ -87,13 +114,62 @@ def parseop(op):
     return op1, ext
 
 
+def preprocess(cmd):
+    if not hasattr(preprocess, 'start'):
+        preprocess.start = 0
+
+    if not hasattr(preprocess, 'labels'):
+        preprocess.labels = {}
+
+    if cmd[0] == "label":
+        preprocess.labels[cmd[1]] = preprocess.start
+        return cmd
+
+    if not cmd[0]:
+        return cmd
+
+    if cmd[0].startswith("#offset "):
+        preprocess.start = int(cmd[0][len("#offset "):], 0)
+        return cmd
+
+    if cmd[0] == "label":
+        preprocess.labels[cmd[1]] = preprocess.start
+
+    preprocess.start += LEN
+    return cmd
+
+
 def translate_command(cmd):
+    # print (cmd)
+
+    if not hasattr(translate_command, 'start'):
+        translate_command.start = 0
+
+    if cmd[0] == "label":
+        # translate_command.labels[cmd[1]] = translate_command.start
+        # return cmd
+        return cmd
+
+    if not cmd[0]:
+        return None
+
+    if cmd[0].startswith('#offset'):
+        return cmd
+
     beta1 = '1' if cmd[0] in JMPS else '0'
 
     b2cmd = bin(CMD[cmd[0]])[2:].zfill(4)
 
-    b2op1, b2ext1 = parseop(cmd[1])
-    b2op2, b2ext2 = parseop(cmd[2])
+    if cmd[0] in NOOPS:
+        b2op1, b2ext1 = 0, None
+        b2op2, b2ext2 = 0, None
+    elif cmd[0] in JMPS:
+        b2op1 = JMPS.index(cmd[0])
+        b2ext1 = preprocess.labels[cmd[1]]
+        b2op2, b2ext2 = 0, None
+    else:
+        b2op1, b2ext1 = parseop(cmd[1])
+        b2op2, b2ext2 = parseop(cmd[2])
 
     if b2ext1 and b2ext2:
         print ("ERROR: illegal operands")
@@ -113,8 +189,10 @@ def translate_command(cmd):
     beta3 = bin(DELAY[cmd[0]])[2:].zfill(8)
     beta4 = str(int('0b%s%s%s' % (beta1, beta2, beta3), 2) % 2)
     num = "0b%s%s%s%s%s" % (beta1, beta2, beta3, beta4, "1"*6)  # last 111111 is reserv
-    print (cmd, "\n", beta1, beta2, beta3, beta4)
+    # print (cmd, "\n", beta1, beta2, beta3, beta4)
     # return ":%s" % hex(int(num, 2))[2:].zfill(11)
+
+    translate_command.start += LEN
     return int(num, 2)
 
 
@@ -130,23 +208,40 @@ def checksum(data):
 
 
 def intel_hex(cmd):
+    if not cmd:
+        return None
     # return 48bit (6byte)
     if not hasattr(intel_hex, 'start'):
         intel_hex.start = 0
 
-    count = '06'
+    if not hasattr(intel_hex, 'labels'):
+        intel_hex.labels = {}
+
+    if type(cmd) is tuple and cmd[0] == 'label':
+        intel_hex.labels[cmd[1]] = intel_hex.start
+        return None
+
+    if type(cmd) is tuple and cmd[0].startswith('#offset'):
+        new_offset = int(cmd[1], 0)
+        # print (intel_hex.start, new_offset)
+        if intel_hex.start > new_offset:
+            print ("WARNING: offset backwards from %X: %s" % (intel_hex.start, repr(cmd)))
+        intel_hex.start = new_offset
+        return None
+
+    count = hex(LEN)[2:].zfill(2)
     addr = hex(intel_hex.start)[2:].zfill(4)
     data = hex(cmd)[2:].zfill(12)
     load = addr + '00' + data
     cs = checksum(load)
 
-    intel_hex.start += 6
+    intel_hex.start += LEN
     return ":%s%s%s" % (count, load, cs)
 
 
 def gen_end():
     addr = hex(intel_hex.start)[2:].zfill(4)
-    intel_hex.start += 6
+    intel_hex.start += LEN
     load = "%s01" % addr
     cs = checksum(load)
     return ":00%s%s" % (load, cs)
@@ -168,11 +263,13 @@ def main():
     if not os.path.exists(build_dir_name):
         os.mkdir(build_dir_name)
 
-    commands = [parse_instruction(line) for line in open(args.file).readlines()]
-    instructions = [translate_command(cmd) for cmd in commands]
-    output = open(args.output, "w")
-    print('\n'.join(intel_hex(instruction) for instruction in instructions), file=output)
-    print(gen_end(), file=output)
+    commands = [parse_instruction(line) for line in filter(lambda x: x.strip(), open(args.file).readlines())]
+    preprocessed = [preprocess(cmd) for cmd in commands]
+    # print (preprocessed)
+    instructions = [translate_command(cmd) for cmd in preprocessed]
+    with open(args.output, "w") as output:
+        print('\n'.join(filter(None, [intel_hex(instruction) for instruction in instructions])), file=output)
+        print(gen_end(), file=output)
 
 
 if __name__ == '__main__':

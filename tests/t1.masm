@@ -1,2 +1,119 @@
 mmov IC,#0
-madd IC, #1, flags,w
+mmov SP,#255 ; на последнее слово
+
+main_loop:
+;check interrupt
+mmov R0,IENC, flags
+mjz noint ; jump if zero in R0 - мультиплексор на переход (выбор по флагу FZ): или из сумматора, или на метку
+; save context
+mmov @SP,IC
+madd SP,#0xFF
+mmov @SP,R1
+madd SP,#0xFF
+mmov @SP,R2
+madd SP,#0xFF
+mmov @SP,R3
+madd SP,#0xFF
+mmov @SP,R4
+madd SP,#0xFF
+mmov @SP,R5
+madd SP,#0xFF
+
+mmov IC,R0
+noint:
+
+
+; read dword of command
+mmovl CMD,@IC ; load command by IC from RAM to CMD
+madd IC,#1
+
+
+mjcmd ; jump command (на схеме из регистров C1:C2 выводы с номером комманды на адрес+0000 в конце (16 микрокоманд на инструкцию))
+
+#offset 0x100
+;1 mov A, B
+mmov op1w, op2r ; op1 и op2 - мультиплексоры, выбирающие операнд по команде в CMD. op1 на запись, op2 на чтение
+
+mjmp main_loop
+
+#offset 0x140
+;2 jmp B
+mmov IC,op2r
+mjmp main_loop
+
+#offset 0x180
+;3 add A,B (формат как у mov)
+mmov R0,op2r
+madd R0,op1r, flags ; разрешение записи признака FZ, FC
+mmov op1w,R0
+
+mjmp main_loop
+#offset 0x2B0
+;4 sub A,B (формат как у mov)
+mmov R0,op2r
+mxor R0,#0xFF ; invert
+madd R0,#1
+madd R0,op1r, flags; разрешение записи признака FZ, FC
+mmov op1w,R0
+
+mjmp main_loop
+#offset 0x2e0
+;5 shr A
+mshr op1w,op1r ; (типа сквозной сдвиг)
+
+mjmp main_loop
+
+#offset 0x310
+;6 shl A
+mshl op1w,op1r, flags; (типа сквозной сдвиг). разрешение записи признака
+mjmp main_loop
+
+#offset 0x340
+;7 inv A: invert
+mmov R0,op1r
+mxor R0,#0xFF ; всегда R0
+mmov op1w,R0
+
+mjmp main_loop
+
+#offset 0x370
+;8 and A,B
+mmov R0,op1r
+mand R0,op2r
+mmov op1w,R0
+
+mjmp main_loop
+
+#offset 0x3A0
+;9 or A,B
+mmov R0,op1r
+mor R0,op2r
+mmov op1w,R0
+
+mjmp main_loop
+
+#offset 0x3D0
+;10 xor A,B
+mmov R0,op1r
+mxor R0,op2r
+mmov op1w,R0
+
+mjmp main_loop
+
+#offset 0x400
+;11 iret - restore context before interrupt
+madd SP,#1
+mmov R5,@SP
+madd SP,#1
+mmov R4,@SP
+madd SP,#1
+mmov R3,@SP
+madd SP,#1
+mmov R2,@SP
+madd SP,#1
+mmov R1,@SP
+madd SP,#1
+mmov IC,@SP
+
+
+mjmp main_loop
