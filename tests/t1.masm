@@ -1,0 +1,2 @@
+mmov IC,#0
+madd IC, #1, flags,w

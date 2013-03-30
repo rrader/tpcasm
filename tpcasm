@@ -1,0 +1,179 @@
+#!/usr/bin/python
+
+import os
+import argparse
+
+VERSION = (0, 1)
+
+JMPS = ['mjmp', 'mjcmp', ]
+DELAY = {
+    'mmov': 3,
+    'mmovl': 3,
+    'mjmp': 3,  # (mjc) по кол-ву флагов
+    'madd': 3,
+    'msub': 3,
+    'mor': 3,
+    'mxor': 3,
+    'mand': 3,
+    'mshl': 3,
+    'mshr': 3,
+    'mjcmd': 3,
+}
+
+CMD = {
+    'mmov': 0,
+    'mmovl': 1,
+    'mjmp': 2,  # (mjc) по кол-ву флагов
+    'madd': 3,
+    'msub': 4,
+    'mor': 5,
+    'mxor': 6,
+    'mand': 7,
+    'mshl': 8,
+    'mshr': 9,
+    'mjcmd': 10,
+}
+
+OP = {
+    'IC': 0,
+    'SP': 1,
+    'FLAGS': 2,
+    'CMD': 3,
+    'R0': 4,
+}
+
+for i in range(2**4 - len(OP)):
+    OP['R' + str(i+1)] = len(OP)
+
+OP['1'] = len(OP)
+OP['0'] = len(OP)
+OP['FFFF'] = len(OP)
+
+OP['MEM'] = len(OP)
+OP['EXT'] = len(OP)
+
+OP['@SP'] = len(OP)
+OP['@IC'] = len(OP)
+
+
+def print_header():
+    print("tpcasm %d.%d" % VERSION)
+    print('-------------------')
+
+
+def parse_instruction(instr):
+    cmd = instr.split()[0]
+    args = ' '.join(instr.split()[1:]).split(',')
+    op1, op2 = args[:2]
+    add = []
+
+    if len(args) >= 3:
+        add = [s.strip() for s in args[2:]]
+
+    return cmd, op1.strip(), op2.strip(), add
+
+
+def parseop(op):
+    ext = None
+    try:
+        op1 = OP[op]
+    except KeyError:
+        if op[0] == "#":
+            op1 = OP['EXT']
+            ext = int(op[1:], 0)
+        if op[0] == "@":
+            op1 = OP['MEM']
+            ext = int(op[1:], 0)
+    return op1, ext
+
+
+def translate_command(cmd):
+    beta1 = '1' if cmd[0] in JMPS else '0'
+
+    b2cmd = bin(CMD[cmd[0]])[2:].zfill(4)
+
+    b2op1, b2ext1 = parseop(cmd[1])
+    b2op2, b2ext2 = parseop(cmd[2])
+
+    if b2ext1 and b2ext2:
+        print ("ERROR: illegal operands")
+
+    b2ext = 0
+    if b2ext1:
+        b2ext = b2ext1
+    if b2ext2:
+        b2ext = b2ext2
+
+    b2op1 = bin(b2op1)[2:].zfill(5)
+    b2op2 = bin(b2op2)[2:].zfill(5)
+    b2ext = bin(b2ext)[2:].zfill(16)
+
+    beta2 = '%s%s%s%s' % (b2cmd, b2op1, b2op2, b2ext)
+
+    beta3 = bin(DELAY[cmd[0]])[2:].zfill(8)
+    beta4 = str(int('0b%s%s%s' % (beta1, beta2, beta3), 2) % 2)
+    num = "0b%s%s%s%s%s" % (beta1, beta2, beta3, beta4, "1"*6)  # last 111111 is reserv
+    print (cmd, "\n", beta1, beta2, beta3, beta4)
+    # return ":%s" % hex(int(num, 2))[2:].zfill(11)
+    return int(num, 2)
+
+
+def checksum(data):
+    #print(data)
+    cs = 0
+    for m in range(len(data)//2):
+        cs += int(data[m*2:m*2+2], 16)
+        #print (data[m*2:m*2+2], int(data[m*2:m*2+2], 16))
+    r = int(hex(cs)[2:][-2:], 16)
+    r = 0x100 - r  # two's complement
+    return hex(r)[2:][-2:].zfill(2)
+
+
+def intel_hex(cmd):
+    # return 48bit (6byte)
+    if not hasattr(intel_hex, 'start'):
+        intel_hex.start = 0
+
+    count = '06'
+    addr = hex(intel_hex.start)[2:].zfill(4)
+    data = hex(cmd)[2:].zfill(12)
+    load = addr + '00' + data
+    cs = checksum(load)
+
+    intel_hex.start += 6
+    return ":%s%s%s" % (count, load, cs)
+
+
+def gen_end():
+    addr = hex(intel_hex.start)[2:].zfill(4)
+    intel_hex.start += 6
+    load = "%s01" % addr
+    cs = checksum(load)
+    return ":00%s%s" % (load, cs)
+
+
+def main():
+    print_header()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('file', metavar="FILE", type=str, help='source file name')
+    parser.add_argument('output', metavar="OUTPUT", type=str, help='output file name')
+    parser.add_argument('--target', type=str, choices=["micro", "firmware"], default="micro",
+                        help="micro - microasm; firmware - device program")
+
+    args = parser.parse_args()
+
+    build_dir_name = os.path.join(os.path.dirname(args.file), 'build')
+
+    if not os.path.exists(build_dir_name):
+        os.mkdir(build_dir_name)
+
+    commands = [parse_instruction(line) for line in open(args.file).readlines()]
+    instructions = [translate_command(cmd) for cmd in commands]
+    output = open(args.output, "w")
+    print('\n'.join(intel_hex(instruction) for instruction in instructions), file=output)
+    print(gen_end(), file=output)
+
+
+if __name__ == '__main__':
+    main()
