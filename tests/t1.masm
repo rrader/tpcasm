@@ -1,3 +1,5 @@
+mjmp main_loop
+
 mmov IC,#0
 mmov SP,#255 ; на последнее слово
 
@@ -30,25 +32,25 @@ madd IC,#1
 
 mjcmd ; jump command (на схеме из регистров C1:C2 выводы с номером комманды на адрес+0000 в конце (16 микрокоманд на инструкцию))
 
-#offset 0x100
+#offset 0x20
 ;1 mov A, B
 mmov op1w, op2r ; op1 и op2 - мультиплексоры, выбирающие операнд по команде в CMD. op1 на запись, op2 на чтение
 
 mjmp main_loop
 
-#offset 0x140
+#offset 0x40
 ;2 jmp B
 mmov IC,op2r
 mjmp main_loop
 
-#offset 0x180
+#offset 0x60
 ;3 add A,B (формат как у mov)
 mmov R0,op2r
 madd R0,op1r, flags ; разрешение записи признака FZ, FC
 mmov op1w,R0
 
 mjmp main_loop
-#offset 0x2B0
+#offset 0x80
 ;4 sub A,B (формат как у mov)
 mmov R0,op2r
 mxor R0,#0xFF ; invert
@@ -57,18 +59,18 @@ madd R0,op1r, flags; разрешение записи признака FZ, FC
 mmov op1w,R0
 
 mjmp main_loop
-#offset 0x2e0
+#offset 0x100
 ;5 shr A
 mshr op1w,op1r ; (типа сквозной сдвиг)
 
 mjmp main_loop
 
-#offset 0x310
+#offset 0x120
 ;6 shl A
 mshl op1w,op1r, flags; (типа сквозной сдвиг). разрешение записи признака
 mjmp main_loop
 
-#offset 0x340
+#offset 0x140
 ;7 inv A: invert
 mmov R0,op1r
 mxor R0,#0xFF ; всегда R0
@@ -76,7 +78,7 @@ mmov op1w,R0
 
 mjmp main_loop
 
-#offset 0x370
+#offset 0x160
 ;8 and A,B
 mmov R0,op1r
 mand R0,op2r
@@ -84,7 +86,7 @@ mmov op1w,R0
 
 mjmp main_loop
 
-#offset 0x3A0
+#offset 0x180
 ;9 or A,B
 mmov R0,op1r
 mor R0,op2r
@@ -92,7 +94,7 @@ mmov op1w,R0
 
 mjmp main_loop
 
-#offset 0x3D0
+#offset 0x1A0
 ;10 xor A,B
 mmov R0,op1r
 mxor R0,op2r
@@ -100,7 +102,7 @@ mmov op1w,R0
 
 mjmp main_loop
 
-#offset 0x400
+#offset 0x1C0
 ;11 iret - restore context before interrupt
 madd SP,#1
 mmov R5,@SP
@@ -115,5 +117,6 @@ mmov R1,@SP
 madd SP,#1
 mmov IC,@SP
 
-
 mjmp main_loop
+
+#offset 0x1E0

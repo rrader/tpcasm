@@ -146,8 +146,6 @@ def translate_command(cmd):
         translate_command.start = 0
 
     if cmd[0] == "label":
-        # translate_command.labels[cmd[1]] = translate_command.start
-        # return cmd
         return cmd
 
     if not cmd[0]:
@@ -188,11 +186,11 @@ def translate_command(cmd):
 
     beta3 = bin(DELAY[cmd[0]])[2:].zfill(8)
     beta4 = str(int('0b%s%s%s' % (beta1, beta2, beta3), 2) % 2)
-    num = "0b%s%s%s%s%s" % (beta1, beta2, beta3, beta4, "1"*6)  # last 111111 is reserv
+    num = "0b%s%s%s%s%s" % ("1"*6, beta4, beta3, beta2, beta1, )  # last 111111 is reserv
     # print (cmd, "\n", beta1, beta2, beta3, beta4)
     # return ":%s" % hex(int(num, 2))[2:].zfill(11)
 
-    translate_command.start += LEN
+    translate_command.start += 1
     return int(num, 2)
 
 
@@ -214,18 +212,14 @@ def intel_hex(cmd):
     if not hasattr(intel_hex, 'start'):
         intel_hex.start = 0
 
-    if not hasattr(intel_hex, 'labels'):
-        intel_hex.labels = {}
-
     if type(cmd) is tuple and cmd[0] == 'label':
-        intel_hex.labels[cmd[1]] = intel_hex.start
         return None
 
     if type(cmd) is tuple and cmd[0].startswith('#offset'):
-        new_offset = int(cmd[1], 0)
+        new_offset = int(cmd[1], 0) * LEN
         # print (intel_hex.start, new_offset)
         if intel_hex.start > new_offset:
-            print ("WARNING: offset backwards from %X: %s" % (intel_hex.start, repr(cmd)))
+            print ("WARNING: offset backwards from %X to %X: %s" % (intel_hex.start, new_offset, repr(cmd)))
         intel_hex.start = new_offset
         return None
 
