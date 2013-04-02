@@ -7,7 +7,7 @@ VERSION = (0, 1)
 
 LEN = 6
 
-JMPS = ['mjmp', 'mjcmp', 'mjz']
+JMPS = ['mjmp', 'mjc', 'mjz', 'mjs']
 NOOPS = ['mjcmd']
 DELAY = {
     'mmov': 3,
