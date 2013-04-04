@@ -8,12 +8,13 @@ VERSION = (0, 1)
 LEN = 6
 
 JMPS = ['mjmp', 'mjc', 'mjz', 'mjs']
-NOOPS = ['mjcmd']
+NOOPS = ['mjcmd', 'mnop']
 DELAY = {
     'mmov': 3,
     'mmovl': 3,
     'mjmp': 3,  # (mjc) по кол-ву флагов
     'mjz': 3,
+    'mjc': 3,
     'madd': 3,
     'msub': 3,
     'mor': 3,
@@ -22,6 +23,9 @@ DELAY = {
     'mshl': 3,
     'mshr': 3,
     'mjcmd': 3,
+    'mnop': 3,
+    'min': 3,
+    'mout': 3,
 }
 
 CMD = {
@@ -30,6 +34,7 @@ CMD = {
     'mmovl': 1,
     'mjmp': 2,  # (mjc) по кол-ву флагов
     'mjz': 2,
+    'mjc': 2,
     'madd': 3,
     'msub': 4,
     'mor': 5,
@@ -38,10 +43,13 @@ CMD = {
     'mshl': 8,
     'mshr': 9,
     'mjcmd': 10,
+    'mnop': 11,
+    'min': 12,
+    'mout': 13,
 }
 
 OP = {
-    'IC': 0,
+    'NUL': 0,
     'SP': 1,
     'FLAGS': 2,
     'CMD': 3,
@@ -65,6 +73,7 @@ OP['IENC'] = len(OP)
 OP['op1r'] = len(OP)
 OP['op1w'] = len(OP)
 OP['op2r'] = len(OP)
+OP['IC'] = 31
 
 
 def print_header():
@@ -121,6 +130,11 @@ def preprocess(cmd):
     if not hasattr(preprocess, 'labels'):
         preprocess.labels = {}
 
+    if cmd[0].startswith("#offset"):
+        preprocess.start = int(cmd[1], 0)
+        # print ("OFFSET", preprocess.start)
+        return cmd
+
     if cmd[0] == "label":
         preprocess.labels[cmd[1]] = preprocess.start
         return cmd
@@ -128,25 +142,22 @@ def preprocess(cmd):
     if not cmd[0]:
         return cmd
 
-    if cmd[0].startswith("#offset "):
-        preprocess.start = int(cmd[0][len("#offset "):], 0)
-        return cmd
-
     if cmd[0] == "label":
         preprocess.labels[cmd[1]] = preprocess.start
 
-    preprocess.start += LEN
+    preprocess.start += 1
     return cmd
 
 
 def translate_command(cmd):
-    # print (cmd)
-
     if not hasattr(translate_command, 'start'):
         translate_command.start = 0
 
     if cmd[0] == "label":
-        return cmd
+        # return cmd
+        # nop after label every time
+        cmd = list(cmd)
+        cmd[0] = 'mnop'
 
     if not cmd[0]:
         return None
@@ -182,24 +193,21 @@ def translate_command(cmd):
     b2op2 = bin(b2op2)[2:].zfill(5)
     b2ext = bin(b2ext)[2:].zfill(16)
 
-    beta2 = '%s%s%s%s' % (b2cmd, b2op1, b2op2, b2ext)
+    beta2 = '00%s%s%s%s' % (b2ext, b2op2, b2op1, b2cmd)
 
     beta3 = bin(DELAY[cmd[0]])[2:].zfill(8)
     beta4 = str(int('0b%s%s%s' % (beta1, beta2, beta3), 2) % 2)
     num = "0b%s%s%s%s%s" % ("1"*6, beta4, beta3, beta2, beta1, )  # last 111111 is reserv
-    # print (cmd, "\n", beta1, beta2, beta3, beta4)
-    # return ":%s" % hex(int(num, 2))[2:].zfill(11)
 
     translate_command.start += 1
     return int(num, 2)
 
 
 def checksum(data):
-    #print(data)
     cs = 0
     for m in range(len(data)//2):
         cs += int(data[m*2:m*2+2], 16)
-        #print (data[m*2:m*2+2], int(data[m*2:m*2+2], 16))
+
     r = int(hex(cs)[2:][-2:], 16)
     r = (0x100 - r) & 0xFF  # two's complement
     return hex(r)[2:][-2:].zfill(2)
@@ -242,15 +250,16 @@ def gen_end():
 
 
 def main():
-    print_header()
-
     parser = argparse.ArgumentParser()
     parser.add_argument('file', metavar="FILE", type=str, help='source file name')
     parser.add_argument('output', metavar="OUTPUT", type=str, help='output file name')
+    parser.add_argument('-q', '--quiet', action="store_true", help="quiet")
     parser.add_argument('--target', type=str, choices=["micro", "firmware"], default="micro",
                         help="micro - microasm; firmware - device program")
 
     args = parser.parse_args()
+
+    if not args.quiet: print_header()
 
     build_dir_name = os.path.join(os.path.dirname(args.file), 'build')
 
