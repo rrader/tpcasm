@@ -9,6 +9,7 @@ LEN = 6
 
 JMPS = ['mjmp', 'mjc', 'mjz', 'mjs']
 NOOPS = ['mjcmd', 'mnop']
+
 DELAY = {
     'mmov': 3,
     'mmovl': 3,
@@ -44,8 +45,8 @@ CMD = {
     'mshr': 9,
     'mjcmd': 10,
     'mnop': 11,
-    'min': 12,
-    'mout': 13,
+    # 'min': 12,
+    # 'mout': 13,
 }
 
 OP = {
@@ -73,6 +74,7 @@ OP['IENC'] = len(OP)
 OP['op1r'] = len(OP)
 OP['op1w'] = len(OP)
 OP['op2r'] = len(OP)
+OP['PORT'] = 30
 OP['IC'] = 31
 
 
@@ -114,6 +116,9 @@ def parseop(op):
     try:
         op1 = OP[op]
     except KeyError:
+        if op[0] == 'P':
+            op1 = OP['PORT']
+            ext = int(op[1:], 0)
         if op[0] == "#":
             op1 = OP['EXT']
             ext = int(op[1:], 0)
