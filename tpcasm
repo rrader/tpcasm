@@ -35,6 +35,7 @@ def print_header():
     print('-------------------')
 
 #preprocess
+strip = partial(map, lambda _: _.strip())
 strip_empty = partial(filter, lambda _: _.strip())
 labels = lambda _: re.findall("\s*(.*):\s*", _)
 label = lambda _: labels(_)[0]
@@ -50,7 +51,7 @@ noncommand = lambda _: ' '.join(_.split()[1:])
 args = lambda _: noncommand(_).split(',')
 args_count = lambda _: len(args(_))
 op = lambda _, n: args(_)[n-1].strip() if args_count(_) >= n else ""
-additional = lambda _: list(strip_empty(args(_)[2:]))
+additional = lambda _: list(strip(strip_empty(args(_)[2:])))
 parse_instruction = lambda _: (command(_), op(_, 1), op(_, 2), additional(_))
 parse_instructions = partial(map, parse_instruction)
 
@@ -149,8 +150,10 @@ def b2data(_):
                        bin_str(b2op2, 5),
                        bin_str(b2op1, 5))
 
+allow_flags = lambda _: "1" if "flags" in _['cmd'][3] else "0"
+
 beta1 = lambda _: '1' if _['cmd'][0] in JUMPS else '0'
-beta2 = lambda _: '00%s%s' % (b2data(_), b2cmd(_))
+beta2 = lambda _: '0%s%s%s' % (allow_flags(_), b2data(_), b2cmd(_))
 beta3 = lambda _: bin_str(DELAY[_['cmd'][0]], 8)
 beta4 = lambda _: str(int('0b%s%s%s' % (beta1(_), beta2(_), beta3(_)), 2) % 2)
 
