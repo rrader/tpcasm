@@ -6,17 +6,14 @@ NOOPS = ['nop', 'end']
 ONEOPT = JUMPS
 
 CMD = {
-    'label': -1, 'mov': 0, 'jmp': 2,  # (mjc) по кол-ву флагов
+    'label': -1, 'mov': 0, 'jmp': 2,
     'jz': 2, 'jc': 2, 'add': 3, 'sub': 4, 'or': 5, 'xor': 6, 'and': 7,
     'shl': 8, 'shr': 9, 'nop': 11,
+    'out': 12, 'in': 13,
 }
 
 OP = {
-    'FFFF': 18, 'op1r': 24, '0': 17, '1': 16, 'op1w': 25, 'MEM': 19,
-    'R11': 15, 'EXT': 20, 'CMD': 3, 'NUL': 0, 'SP': 1, 'op2r': 26,
-    '@SP': 21, '@IC': 22, 'FLAGS': 2, 'IC': 31, 'PORT': 30, 'IENC': 23,
-    'R5': 9, 'R4': 8, 'R7': 11, 'R6': 10, 'R1': 5, 'R0': 4, 'R3': 7,
-    'R2': 6, 'R9': 13, 'R8': 12, 'R10': 14}
+    'NUL': 0, 'G0': 1, 'EXT': 2}
 
 
 #parse
@@ -96,6 +93,8 @@ def parseop(op):
 
 
 b2cmd = lambda _: bin_str(CMD[_['cmd'][0]], 4)
+
+cmd = lambda _: bin_str(CMD[_['cmd'][0]], 6)
 b2op1d = lambda _: parseop(_['cmd'][1]) if _['cmd'][0] not in NOOPS \
     else (0, None)
 b2op2d = lambda _: parseop(_['cmd'][2]) if _['cmd'][0] not in ONEOPT+NOOPS \
@@ -111,16 +110,10 @@ def b2data(_):
                        bin_str(b2op2, 5),
                        bin_str(b2op1, 5))
 
-allow_flags = lambda _: "1" if "flags" in _['cmd'][3] else "0"
-
-beta1 = lambda _: '1' if _['cmd'][0] in JUMPS else '0'
-beta2 = lambda _: '0%s%s%s' % (allow_flags(_), b2data(_), b2cmd(_))
-beta3 = lambda _: bin_str(DELAY[_['cmd'][0]], 8)
-beta4 = lambda _: str(int('0b%s%s%s' % (beta1(_), beta2(_), beta3(_)), 2) % 2)
+beta2 = lambda _: '0%s%s' % (b2cmd(_), b2data(_))
 
 translate_command = lambda _: \
-    (int("0b%s%s%s%s%s" % ("1"*6, beta4(_), beta3(_),
-                           beta2(_), beta1(_), ), 2), _['offset']) \
+    (int("0b%s" % (beta2(_), ), 2), _['offset']) \
     if _['cmd'][0] != 'end' else (-1, _['offset'])
 translate_commands = partial(map, translate_command)
 nop_labels = partial(map, label_nop)
