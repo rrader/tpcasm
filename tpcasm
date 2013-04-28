@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+import os
+import sys
 import argparse
 import fileinput
 from functools import partial, reduce
@@ -27,7 +29,7 @@ def main():
     parser.add_argument('-q', '--quiet', action="store_true",
                         help="quiet")
     parser.add_argument('--target', type=str, choices=["micro", "firmware"],
-                        default="micro",
+                        default="auto",
                         help="micro - microasm; firmware - device program")
 
     args = parser.parse_args()
@@ -37,10 +39,21 @@ def main():
             chain(fileinput.input(args.file), ['end'])
         ))
 
-    if args.target == "micro":
+    target = args.target
+
+    if target == "auto":
+        if os.path.splitext(args.file)[1] == ".masm":
+            target = "micro"
+        elif os.path.splitext(args.file)[1] == ".asm":
+            target = "firmware"
+        else:
+            print("Cannot detect target. See --help")
+            sys.exit(1)
+
+    if target == "micro":
         converted = micro.process(preprocessed)
 
-    if args.target == "firmware":
+    if target == "firmware":
         converted = firmware.process(preprocessed)
 
     with open(args.output, "w") as output:
