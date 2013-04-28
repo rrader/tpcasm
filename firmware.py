@@ -6,7 +6,7 @@ NOOPS = ['nop', 'end']
 ONEOPT = JUMPS
 
 CMD = {
-    'label': -1, 'mov': 0, 'jmp': 2,
+    'label': -1, 'mov': 1, 'jmp': 2,
     'jz': 2, 'jc': 2, 'add': 3, 'sub': 4, 'or': 5, 'xor': 6, 'and': 7,
     'shl': 8, 'shr': 9, 'nop': 11,
     'out': 12, 'in': 13,
@@ -127,14 +127,16 @@ def end_statement(_):
     return ":00%s%s" % (load, checksum(load))
 
 
-load = lambda _: hex_str(LEN, 2) + \
-    hex_str(_[1] * LEN, 4) + '00' + \
-    hex_str(_[0], 12)
+load = lambda _, n: hex_str(LEN//2, 2) + \
+    hex_str((_[1] * LEN)+n*LEN//2, 4) + '00' + \
+    hex_str(_[0], LEN*2)[n*LEN:(n+1)*LEN]
 
-cs = lambda _: checksum(load(_))
+cs = lambda _, n: checksum(load(_, n))
 
 intel_hex = partial(map,
-                    lambda _: ":%s%s" % (load(_), cs(_)) if _[0] != -1 else
+                    lambda _: (":%s%s\n" % (load(_, 0), cs(_, 0)) +
+                               ":%s%s" % (load(_, 1), cs(_, 1)))
+                    if _[0] != -1 else
                     end_statement(_))
 
 

@@ -21,7 +21,8 @@ OP = {
     'R11': 15, 'EXT': 20, 'CMD': 3, 'NUL': 0, 'SP': 1, 'op2r': 26,
     '@SP': 21, '@IC': 22, 'FLAGS': 2, 'IC': 31, 'PORT': 30, 'IENC': 23,
     'R5': 9, 'R4': 8, 'R7': 11, 'R6': 10, 'R1': 5, 'R0': 4, 'R3': 7,
-    'R2': 6, 'R9': 13, 'R8': 12, 'R10': 14, 'PORT[R0]': 29}
+    'R2': 6, 'R9': 13, 'R8': 12, 'R10': 14, 'PORT[R0]': 29, '@R0': 27,
+    '@G0': 28}
 
 
 #parse
@@ -141,7 +142,7 @@ def end_statement(_):
 
 load = lambda _: hex_str(LEN, 2) + \
     hex_str(_[1] * LEN, 4) + '00' + \
-    hex_str(_[0], 12)
+    hex_str(_[0], LEN*2)
 
 cs = lambda _: checksum(load(_))
 
